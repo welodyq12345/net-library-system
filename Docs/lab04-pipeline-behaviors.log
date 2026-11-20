@@ -1,0 +1,17 @@
+=============================================================================
+ Лаб. 04 — доказ: ValidationBehavior зупиняє запит ДО виклику обробника
+ (лог LoggingBehavior; порядок behaviors: Logging -> Exception -> Validation
+  -> Performance -> обробник)
+=============================================================================
+
+--- 1. КОРЕКТНА команда: у лозі є і "Handling", і "Handled" ---------------
+[12:41:20 INF] Handling CreateReviewCommand
+[12:41:20 INF] Handled CreateReviewCommand
+
+--- 2. НЕКОРЕКТНА команда: є "Handling", але "Handled" ВІДСУТНІЙ ----------
+[12:41:20 INF] Handling CreateReviewCommand
+[12:41:20 WRN] Validation failed for CreateReviewCommand: Rating: 'Rating' має бути між 1 та 5 (включно). Ви ввели 10.
+
+ВИСНОВОК: у другому випадку рядка "Handled" немає — обробник
+CreateReviewCommandHandler не виконувався взагалі. ValidationBehavior
+перервав конвеєр MediatR до нього й повернув 400 ValidationProblemDetails.

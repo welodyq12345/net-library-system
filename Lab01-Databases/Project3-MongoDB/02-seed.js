@@ -34,9 +34,9 @@ db.discussions.replaceOne(
         createdAt: new Date("2026-09-10T09:00:00Z"),
         lastActivityAt: new Date("2026-11-18T14:30:00Z"),
         messages: [                               // вбудований масив повідомлень
-            { author: "Олена",  text: "Класика, яку варто перечитувати дорослим.", postedAt: new Date("2026-09-10T09:05:00Z"), replyTo: null },
-            { author: "Андрій", text: "У школі складно, але з хорошим учителем — так.", postedAt: new Date("2026-09-11T10:20:00Z"), replyTo: 0 },
-            { author: "Марія",  text: "Погоджуюсь, контекст важливіший за заучування.", postedAt: new Date("2026-11-18T14:30:00Z"), replyTo: 1 }
+            { author: { displayName: "Олена" },  text: "Класика, яку варто перечитувати дорослим.", postedAt: new Date("2026-09-10T09:05:00Z"), replyTo: null },
+            { author: { displayName: "Андрій" }, text: "У школі складно, але з хорошим учителем — так.", postedAt: new Date("2026-09-11T10:20:00Z"), replyTo: 0 },
+            { author: { displayName: "Марія" },  text: "Погоджуюсь, контекст важливіший за заучування.", postedAt: new Date("2026-11-18T14:30:00Z"), replyTo: 1 }
         ]
     },
     { upsert: true }
@@ -54,8 +54,8 @@ db.discussions.replaceOne(
         createdAt: new Date("2026-10-02T12:00:00Z"),
         lastActivityAt: new Date("2026-10-20T18:00:00Z"),
         messages: [
-            { author: "Ігор",   text: "Найсильніше — відсутність пафосу.", postedAt: new Date("2026-10-02T12:10:00Z"), replyTo: null },
-            { author: "Олена",  text: "Саме тому він і болить.",            postedAt: new Date("2026-10-20T18:00:00Z"), replyTo: 0 }
+            { author: { displayName: "Ігор" },   text: "Найсильніше — відсутність пафосу.", postedAt: new Date("2026-10-02T12:10:00Z"), replyTo: null },
+            { author: { displayName: "Олена" },  text: "Саме тому він і болить.",            postedAt: new Date("2026-10-20T18:00:00Z"), replyTo: 0 }
         ]
     },
     { upsert: true }
@@ -80,8 +80,8 @@ db.reviews.replaceOne(
         rating: NumberInt(5),
         text: "Видання з якісними примітками — читати набагато легше.",
         comments: [                               // ВБУДОВАНИЙ масив
-            { author: "Андрій", text: "Згоден, примітки врятували.", createdAt: new Date("2026-09-15T08:00:00Z"), likes: NumberInt(3) },
-            { author: "Марія",  text: "А яке саме видання?",          createdAt: new Date("2026-09-16T09:30:00Z"), likes: NumberInt(0) }
+            { author: { displayName: "Андрій" }, text: "Згоден, примітки врятували.", createdAt: new Date("2026-09-15T08:00:00Z"), likes: NumberInt(3) },
+            { author: { displayName: "Марія" },  text: "А яке саме видання?",          createdAt: new Date("2026-09-16T09:30:00Z"), likes: NumberInt(0) }
         ],
         discussionId: DISC_KOBZAR,                // ПОСИЛАННЯ на окрему колекцію
         createdAt: new Date("2026-09-14T07:45:00Z")
@@ -102,7 +102,7 @@ db.reviews.replaceOne(
         photos: ["internat-cover.jpg", "internat-page-77.jpg"],   // поле лише тут
         tags: ["війна", "сучасна проза", "мушрід"],                // поле лише тут
         comments: [
-            { author: "Ігор", text: "Варто читати разом із «Ворошиловградом».", createdAt: new Date("2026-11-02T11:00:00Z"), likes: NumberInt(5) }
+            { author: { displayName: "Ігор" }, text: "Варто читати разом із «Ворошиловградом».", createdAt: new Date("2026-11-02T11:00:00Z"), likes: NumberInt(5) }
         ],
         discussionId: DISC_INTERNAT,
         createdAt: new Date("2026-11-01T19:20:00Z")
