@@ -1,0 +1,245 @@
+
+=============================================================
+ 1. Гнучка схема: різні набори полів в колекції reviews
+=============================================================
+  "Кобзар"
+      поля: _id, author, bookId, bookTitle, comments, createdAt, discussionId, rating, text
+  "Інтернат"
+      поля: _id, author, bookId, bookTitle, comments, createdAt, discussionId, photos, rating, tags, text
+  "Тигролови"
+      поля: _id, author, bookId, bookTitle, createdAt, rating, text
+  "Чорний Ворон"
+      поля: _id, author, bookId, bookTitle, comments, createdAt, rating, ratings, readingContext
+  "Місто"
+      поля: _id, author, bookId, bookTitle, createdAt, rating
+
+  Повний перелік полів, що зустрічаються в колекції:
+    _id                присутнє в 5 з 5 документів
+    author             присутнє в 5 з 5 документів
+    bookId             присутнє в 5 з 5 документів
+    bookTitle          присутнє в 5 з 5 документів
+    createdAt          присутнє в 5 з 5 документів
+    rating             присутнє в 5 з 5 документів
+    comments           присутнє в 3 з 5 документів
+    text               присутнє в 3 з 5 документів
+    discussionId       присутнє в 2 з 5 документів
+    photos             присутнє в 1 з 5 документів
+    ratings            присутнє в 1 з 5 документів
+    readingContext     присутнє в 1 з 5 документів
+    tags               присутнє в 1 з 5 документів
+
+=============================================================
+ 1b. Гнучка схема в readerProfiles
+=============================================================
+  readerId=1  поля: _id, badges, bio, displayName, preferences, readerId, stats
+  readerId=2  поля: _id, displayName, readerId, socialLinks, stats
+  readerId=3  поля: _id, displayName, readerId
+
+=============================================================
+ 2. Embedding: автор і коментарі приходять разом із відгуком (1 запит)
+=============================================================
+{
+  _id: ObjectId('66f0c20000000000000000b1'),
+  bookTitle: 'Кобзар',
+  author: {
+    displayName: 'Олена К.'
+  },
+  comments: [
+    {
+      author: 'Андрій',
+      text: 'Згоден, примітки врятували.'
+    },
+    {
+      author: 'Марія',
+      text: 'А яке саме видання?'
+    }
+  ]
+}
+
+=============================================================
+ 3. Referencing: $lookup відгук -> discussions за discussionId
+=============================================================
+{
+  bookTitle: 'Кобзар',
+  reviewRating: 5,
+  embeddedComments: 2,
+  discussionTopic: 'Чи варто читати «Кобзар» у школі?',
+  discussionMessages: 3,
+  discussionClosed: false
+}
+{
+  bookTitle: 'Інтернат',
+  reviewRating: 5,
+  embeddedComments: 1,
+  discussionTopic: 'Мова війни в романі Жадана',
+  discussionMessages: 2,
+  discussionClosed: true
+}
+  >> ГІБРИД: кілька коментарів ВБУДОВАНО у відгук (швидке читання),
+  >> а необмежено довга ветка — ЗА ПОСИЛАННЯМ в окремій колекції.
+
+=============================================================
+ 4. Aggregation pipeline: рейтинг книг за відгуками
+=============================================================
+{
+  reviews: 1,
+  minRating: 5,
+  maxRating: 5,
+  commentsTotal: 1,
+  bookId: Long('4'),
+  bookTitle: 'Інтернат',
+  avgRating: 5
+}
+{
+  reviews: 1,
+  minRating: 5,
+  maxRating: 5,
+  commentsTotal: 2,
+  bookId: Long('1'),
+  bookTitle: 'Кобзар',
+  avgRating: 5
+}
+{
+  reviews: 1,
+  minRating: 4,
+  maxRating: 4,
+  commentsTotal: 0,
+  bookId: Long('2'),
+  bookTitle: 'Тигролови',
+  avgRating: 4
+}
+{
+  reviews: 1,
+  minRating: 4,
+  maxRating: 4,
+  commentsTotal: 0,
+  bookId: Long('5'),
+  bookTitle: 'Чорний Ворон',
+  avgRating: 4
+}
+{
+  reviews: 1,
+  minRating: 3,
+  maxRating: 3,
+  commentsTotal: 0,
+  bookId: Long('3'),
+  bookTitle: 'Місто',
+  avgRating: 3
+}
+
+=============================================================
+ 5. Aggregation + $unwind: топ коментаторів за лайками
+=============================================================
+{
+  _id: 'Ігор',
+  comments: 1,
+  likes: 5
+}
+{
+  _id: 'Андрій',
+  comments: 1,
+  likes: 3
+}
+{
+  _id: 'Марія',
+  comments: 1,
+  likes: 0
+}
+
+=============================================================
+ 6. Денормалізація bookTitle (політика дублювання)
+=============================================================
+  bookId=1  bookTitle="Кобзар"  <- копія з LibraryCatalogDb, оновлюється подіями
+  bookId=2  bookTitle="Тигролови"  <- копія з LibraryCatalogDb, оновлюється подіями
+  bookId=3  bookTitle="Місто"  <- копія з LibraryCatalogDb, оновлюється подіями
+  bookId=4  bookTitle="Інтернат"  <- копія з LibraryCatalogDb, оновлюється подіями
+  bookId=5  bookTitle="Чорний Ворон"  <- копія з LibraryCatalogDb, оновлюється подіями
+  >> Жодного FOREIGN KEY на LibraryCatalogDb не існує і не може існувати:
+  >> це інша база (і взагалі інша СУБД). Цілісність — на рівні подій.
+
+=============================================================
+ 7. Запит по вбудованому масиву (multikey index ix_lists_item_book)
+=============================================================
+{
+  title: 'Українська класика на зиму',
+  isPublic: true,
+  owner: {
+    displayName: 'Олена К.'
+  }
+}
+
+=============================================================
+ 7b. $elemMatch: позиції підбірки зі статусом 'reading'
+=============================================================
+{
+  list: 'Українська класика на зиму',
+  book: 'Місто',
+  status: 'reading'
+}
+
+=============================================================
+ 8. Відгуки, де поле photos взагалі існує (partial index)
+=============================================================
+{
+  bookTitle: 'Інтернат',
+  photos: [
+    'internat-cover.jpg',
+    'internat-page-77.jpg'
+  ]
+}
+
+=============================================================
+ 9. JSON Schema Validation: rating=9 має бути відхилено
+=============================================================
+  OK  Валідатор відхилив документ. code=121 — Document failed validation
+
+=============================================================
+ 9b. JSON Schema Validation: відсутнє обов'язкове поле author
+=============================================================
+  OK  Валідатор відхилив документ. code=121 — Document failed validation
+
+=============================================================
+ 9c. А ось документ із НОВИМ, не описаним у схемі полем — приймається
+=============================================================
+  OK  Документ із полями audioReviewUrl / listenedWhile збережено.
+  >> Саме це й означає «гнучка схема»: ядро валідується, розширення вільні.
+
+=============================================================
+ 10. Індекси всіх колекцій
+=============================================================
+
+  reviews:
+    _id_                       {"_id":1} 
+    ix_reviews_book_created    {"bookId":1,"createdAt":-1} 
+    ix_reviews_book_rating     {"bookId":1,"rating":-1} 
+    ix_reviews_reader          {"author.readerId":1} [sparse]
+    ix_reviews_fulltext        {"_fts":"text","_ftsx":1} 
+    ix_reviews_with_photos     {"createdAt":-1} [partial]
+
+  discussions:
+    _id_                       {"_id":1} 
+    ix_discussions_book_open   {"bookId":1,"isClosed":1} 
+    ix_discussions_activity    {"lastActivityAt":-1} [sparse]
+
+  readingLists:
+    _id_                       {"_id":1} 
+    ix_lists_item_book         {"items.bookId":1,"isPublic":1} 
+    ix_lists_owner             {"owner.readerId":1} [sparse]
+
+  readerProfiles:
+    _id_                       {"_id":1} 
+    ix_profiles_reader         {"readerId":1} [unique]
+
+=============================================================
+ 11. explain(): запит по bookId використовує індекс
+=============================================================
+  winningPlan: {"stage":"FETCH","inputStage":{"stage":"IXSCAN","keyPattern":{"bookId":1,"createdAt":-1},"indexName":"ix_reviews_book_created","isMultiKey":false,"multiKeyPaths":{"bookId":[],"createdAt":[]},"isUnique":false,"isSparse":false,"isPartial":false,"indexVersion":2,"direction":"forward","indexBounds":{"bookId":["[1, 1]"],"createdAt":["[MaxKey, MinKey]"]}}}
+
+=============================================================
+ ПЕРЕВІРКА ЗАВЕРШЕНА
+=============================================================
+Підсумок колекцій:
+  reviews          5 документів
+  discussions      2 документів
+  readingLists     2 документів
+  readerProfiles   3 документів

@@ -1,0 +1,13 @@
+=============================================================================
+ Лаб. 03 — доказ: Eager Loading = 1 SQL-запит, Explicit Loading = 2 запити
+ (лог SQL-команд EF Core, Serilog: Microsoft.EntityFrameworkCore.Database.Command = Information)
+=============================================================================
+
+--- EAGER LOADING: GET /api/books/1 -> ОДИН запит із JOIN-ами -------------
+[02:22:42 INF] Executed DbCommand (3ms) [Parameters=[@__id_0='1'], CommandType='Text', CommandTimeout='30']
+
+--- EXPLICIT LOADING: GET /api/authors/1?includeBooks=true -> ДВА запити ---
+[02:22:43 INF] Executed DbCommand (2ms) [Parameters=[@__id_0='1'], CommandType='Text', CommandTimeout='30']
+[02:22:43 INF] Executed DbCommand (2ms) [Parameters=[@__p_0='1'], CommandType='Text', CommandTimeout='30']
+
+ВИСНОВОК: Eager = 1 запит, Explicit = 2 запити.
