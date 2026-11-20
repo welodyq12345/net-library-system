@@ -1,0 +1,320 @@
+{
+  "info": {
+    "name": "Library Catalog API (Лаб. 03)",
+    "description": "Мікросервіс «Каталог книг» на EF Core (Code-First).\nДемонструє Eager/Explicit Loading, LINQ через проміжну сутність M:N,\nпагінацію та фільтрацію на рівні БД, два рівні валідації і ProblemDetails.\n\nЗмінна baseUrl за замовчуванням http://localhost:5290.\nКолекція створює книгу з унікальним ISBN і прибирає її наприкінці,\nтому її можна запускати повторно.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5290", "type": "string" },
+    { "key": "bookId", "value": "", "type": "string" },
+    { "key": "isbn", "value": "", "type": "string" },
+    { "key": "totalCount", "value": "", "type": "string" }
+  ],
+  "event": [{
+    "listen": "prerequest",
+    "script": { "type": "text/javascript", "exec": [
+      "if (!pm.collectionVariables.get('isbn')) {",
+      "  const n = Math.floor(1000 + Math.random() * 9000);",
+      "  pm.collectionVariables.set('isbn', `978-966-03-${n}-7`);",
+      "}"
+    ] }
+  }],
+  "item": [
+    {
+      "name": "00. Health — міграції застосовано, база доступна",
+      "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('200 OK', () => pm.response.to.have.status(200));",
+        "pm.test('статус Healthy', () => pm.expect(pm.response.json().status).to.eql('Healthy'));"
+      ] } }]
+    },
+    {
+      "name": "01. Статичний сідінг HasData: 6 авторів, 5 жанрів",
+      "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/authors", "host": ["{{baseUrl}}"], "path": ["api","authors"] } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('200 OK', () => pm.response.to.have.status(200));",
+        "pm.test('6 авторів із HasData', () => pm.expect(pm.response.json().length).to.eql(6));",
+        "pm.test('кирилиця збереглася', () => pm.expect(JSON.stringify(pm.response.json())).to.include('Шевченко'));"
+      ] } }]
+    },
+    {
+      "name": "02. ПАГІНАЦІЯ: page=2&pageSize=5 -> totalCount = ВСІ записи",
+      "request": { "method": "GET", "url": {
+        "raw": "{{baseUrl}}/api/books?page=2&pageSize=5",
+        "host": ["{{baseUrl}}"], "path": ["api","books"],
+        "query": [{ "key": "page", "value": "2" }, { "key": "pageSize", "value": "5" }]
+      } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "const b = pm.response.json();",
+        "pm.collectionVariables.set('totalCount', b.totalCount);",
+        "pm.test('200 OK', () => pm.response.to.have.status(200));",
+        "pm.test('totalCount > кількості на сторінці', () => pm.expect(b.totalCount).to.be.above(b.items.length));",
+        "pm.test('метадані пагінації в тілі', () => { ['page','pageSize','totalPages','hasNext','hasPrevious'].forEach(k => pm.expect(b).to.have.property(k)); });",
+        "pm.test('метадані продубльовано в заголовках', () => pm.expect(pm.response.headers.get('X-Pagination-TotalCount')).to.eql(String(b.totalCount)));"
+      ] } }]
+    },
+    {
+      "name": "03. ФІЛЬТР за діапазоном тарифу",
+      "request": { "method": "GET", "url": {
+        "raw": "{{baseUrl}}/api/books?minFee=4&maxFee=5",
+        "host": ["{{baseUrl}}"], "path": ["api","books"],
+        "query": [{ "key": "minFee", "value": "4" }, { "key": "maxFee", "value": "5" }]
+      } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "const b = pm.response.json();",
+        "pm.test('200 OK', () => pm.response.to.have.status(200));",
+        "pm.test('усі тарифи в діапазоні 4..5', () => b.items.forEach(i => pm.expect(i.dailyFee).to.be.within(4, 5)));",
+        "pm.test('вибірка звузилася', () => pm.expect(b.totalCount).to.be.below(Number(pm.collectionVariables.get('totalCount'))));"
+      ] } }]
+    },
+    {
+      "name": "04. СОРТУВАННЯ за тарифом спаданням",
+      "request": { "method": "GET", "url": {
+        "raw": "{{baseUrl}}/api/books?sortBy=fee&sortDir=desc&pageSize=100",
+        "host": ["{{baseUrl}}"], "path": ["api","books"],
+        "query": [{ "key": "sortBy", "value": "fee" }, { "key": "sortDir", "value": "desc" }, { "key": "pageSize", "value": "100" }]
+      } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "const fees = pm.response.json().items.map(i => i.dailyFee);",
+        "pm.test('200 OK', () => pm.response.to.have.status(200));",
+        "pm.test('відсортовано за спаданням', () => pm.expect(fees).to.eql([...fees].sort((a,b) => b-a)));"
+      ] } }]
+    },
+    {
+      "name": "05. Недозволене поле сортування -> 400",
+      "request": { "method": "GET", "url": {
+        "raw": "{{baseUrl}}/api/books?sortBy=drop_table",
+        "host": ["{{baseUrl}}"], "path": ["api","books"],
+        "query": [{ "key": "sortBy", "value": "drop_table" }]
+      } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+        "pm.test('білий список полів сортування спрацював', () => pm.expect(JSON.stringify(pm.response.json())).to.include('SortBy'));"
+      ] } }]
+    },
+    {
+      "name": "06. EAGER LOADING: GET /api/books/1 — усе одним запитом",
+      "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/books/1", "host": ["{{baseUrl}}"], "path": ["api","books","1"] } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "const b = pm.response.json();",
+        "pm.test('200 OK', () => pm.response.to.have.status(200));",
+        "pm.test('автор підтягнувся (1:N)', () => pm.expect(b.authorName).to.be.a('string').and.not.empty);",
+        "pm.test('опис підтягнувся (1:1)', () => pm.expect(b.detail).to.not.be.null);",
+        "pm.test('примірники підтягнулися (1:N)', () => pm.expect(b.copies.length).to.be.at.least(1));",
+        "pm.test('жанри підтягнулися (M:N)', () => pm.expect(b.genres.length).to.be.at.least(1));"
+      ] } }]
+    },
+    {
+      "name": "07. EXPLICIT LOADING вимкнено: книги НЕ завантажено",
+      "request": { "method": "GET", "url": {
+        "raw": "{{baseUrl}}/api/authors/1?includeBooks=false",
+        "host": ["{{baseUrl}}"], "path": ["api","authors","1"],
+        "query": [{ "key": "includeBooks", "value": "false" }]
+      } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('200 OK', () => pm.response.to.have.status(200));",
+        "pm.test('books порожній — другий запит не виконувався', () => pm.expect(pm.response.json().books.length).to.eql(0));"
+      ] } }]
+    },
+    {
+      "name": "08. EXPLICIT LOADING увімкнено: книги довантажено другим запитом",
+      "request": { "method": "GET", "url": {
+        "raw": "{{baseUrl}}/api/authors/1?includeBooks=true",
+        "host": ["{{baseUrl}}"], "path": ["api","authors","1"],
+        "query": [{ "key": "includeBooks", "value": "true" }]
+      } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('200 OK', () => pm.response.to.have.status(200));",
+        "pm.test('books заповнено', () => pm.expect(pm.response.json().books.length).to.be.at.least(1));"
+      ] } }]
+    },
+    {
+      "name": "09. LINQ через M:N: нові книги жанру за полем AddedAt",
+      "request": { "method": "GET", "url": {
+        "raw": "{{baseUrl}}/api/genres/%D0%9F%D0%BE%D0%B5%D0%B7%D1%96%D1%8F/recent-books?since=2000-01-01T00:00:00Z",
+        "host": ["{{baseUrl}}"], "path": ["api","genres","%D0%9F%D0%BE%D0%B5%D0%B7%D1%96%D1%8F","recent-books"],
+        "query": [{ "key": "since", "value": "2000-01-01T00:00:00Z" }]
+      } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('200 OK', () => pm.response.to.have.status(200));",
+        "pm.test('повернуто книги жанру «Поезія»', () => pm.expect(pm.response.json().length).to.be.at.least(1));"
+      ] } }]
+    },
+    {
+      "name": "10. Статистика жанрів (GROUP BY виконує БД)",
+      "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/genres/stats", "host": ["{{baseUrl}}"], "path": ["api","genres","stats"] } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('200 OK', () => pm.response.to.have.status(200));",
+        "pm.test('є назва жанру й кількість книг', () => { const r = pm.response.json()[0]; pm.expect(r).to.have.property('genreName'); pm.expect(r).to.have.property('bookCount'); });"
+      ] } }]
+    },
+    {
+      "name": "11. ВАЛІДАЦІЯ: порожня назва -> 400 з помилками по полях",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"title\": \"\",\n  \"isbn\": \"bad-isbn\",\n  \"dailyFee\": 0,\n  \"authorId\": 0\n}" },
+        "url": { "raw": "{{baseUrl}}/api/books", "host": ["{{baseUrl}}"], "path": ["api","books"] }
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('400 Bad Request, а не 500', () => pm.response.to.have.status(400));",
+        "pm.test('помилки розбиті по полях', () => pm.expect(Object.keys(pm.response.json().errors).length).to.be.at.least(3));"
+      ] } }]
+    },
+    {
+      "name": "12. FluentValidation: publisher без description -> 400",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json; charset=utf-8" }],
+        "body": { "mode": "raw", "raw": "{\n  \"title\": \"Взаємозалежні поля\",\n  \"isbn\": \"{{isbn}}\",\n  \"dailyFee\": 5,\n  \"authorId\": 1,\n  \"publisher\": \"Видавництво без опису\"\n}" },
+        "url": { "raw": "{{baseUrl}}/api/books", "host": ["{{baseUrl}}"], "path": ["api","books"] }
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+        "pm.test('спрацювало правило взаємозалежності', () => pm.expect(JSON.stringify(pm.response.json())).to.include('Description'));"
+      ] } }]
+    },
+    {
+      "name": "13. POST /api/books -> 201 Created + Location",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json; charset=utf-8" }],
+        "body": { "mode": "raw", "raw": "{\n  \"title\": \"Postman-тест каталогу\",\n  \"isbn\": \"{{isbn}}\",\n  \"dailyFee\": 7.25,\n  \"authorId\": 1,\n  \"publishedYear\": 2020,\n  \"description\": \"Книга, створена колекцією Postman.\",\n  \"publisher\": \"Тестове видавництво\",\n  \"pageCount\": 123,\n  \"genreIds\": [3, 4]\n}" },
+        "url": { "raw": "{{baseUrl}}/api/books", "host": ["{{baseUrl}}"], "path": ["api","books"] }
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('201 Created', () => pm.response.to.have.status(201));",
+        "pm.test('є заголовок Location', () => pm.expect(pm.response.headers.has('Location')).to.be.true);",
+        "const b = pm.response.json();",
+        "pm.collectionVariables.set('bookId', b.id);",
+        "pm.test('жанри призначено через M:N', () => pm.expect(b.genres.length).to.eql(2));",
+        "pm.test('опис створено (1:1)', () => pm.expect(b.detail).to.not.be.null);",
+        "pm.test('залишок 0 — примірників ще немає', () => pm.expect(b.availableCopies).to.eql(0));"
+      ] } }]
+    },
+    {
+      "name": "14. Повторний ISBN -> 409 Conflict",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json; charset=utf-8" }],
+        "body": { "mode": "raw", "raw": "{\n  \"title\": \"Дублікат ISBN\",\n  \"isbn\": \"{{isbn}}\",\n  \"dailyFee\": 3,\n  \"authorId\": 1,\n  \"description\": \"дублікат\",\n  \"publisher\": \"x\",\n  \"pageCount\": 10\n}" },
+        "url": { "raw": "{{baseUrl}}/api/books", "host": ["{{baseUrl}}"], "path": ["api","books"] }
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+        "pm.test('ProblemDetails пояснює конфлікт', () => pm.expect(pm.response.json().detail).to.include('ISBN'));"
+      ] } }]
+    },
+    {
+      "name": "15. ІНВАРІАНТ СУТНОСТІ: списати 5 при залишку 0 -> 409",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{ \"quantity\": 5 }" },
+        "url": { "raw": "{{baseUrl}}/api/books/{{bookId}}/remove-stock", "host": ["{{baseUrl}}"], "path": ["api","books","{{bookId}}","remove-stock"] }
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+        "pm.test('повідомлення прийшло з методу сутності Book.RemoveStock', () => pm.expect(pm.response.json().detail.toLowerCase()).to.include('available'));"
+      ] } }]
+    },
+    {
+      "name": "16. Додати примірник -> 200, залишок +1",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"inventoryNumber\": \"PM-0001\",\n  \"shelf\": \"Z-01\",\n  \"condition\": \"New\"\n}" },
+        "url": { "raw": "{{baseUrl}}/api/books/{{bookId}}/copies", "host": ["{{baseUrl}}"], "path": ["api","books","{{bookId}}","copies"] }
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('200 OK', () => pm.response.to.have.status(200));",
+        "pm.test('залишок став 1', () => pm.expect(pm.response.json().availableCopies).to.eql(1));",
+        "pm.test('примірник у списку (1:N)', () => pm.expect(pm.response.json().copies.length).to.eql(1));"
+      ] } }]
+    },
+    {
+      "name": "17. Повторний інвентарний номер -> 409",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"inventoryNumber\": \"PM-0001\",\n  \"condition\": \"Good\"\n}" },
+        "url": { "raw": "{{baseUrl}}/api/books/{{bookId}}/copies", "host": ["{{baseUrl}}"], "path": ["api","books","{{bookId}}","copies"] }
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('409 Conflict (інваріант сутності)', () => pm.response.to.have.status(409));"
+      ] } }]
+    },
+    {
+      "name": "18. Повторне призначення жанру -> 409",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{ \"genreId\": 3, \"isPrimary\": false }" },
+        "url": { "raw": "{{baseUrl}}/api/books/{{bookId}}/genres", "host": ["{{baseUrl}}"], "path": ["api","books","{{bookId}}","genres"] }
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('409 Conflict', () => pm.response.to.have.status(409));"
+      ] } }]
+    },
+    {
+      "name": "19. Неіснуючий Id -> 404 ProblemDetails (не 500)",
+      "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/books/999999", "host": ["{{baseUrl}}"], "path": ["api","books","999999"] } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('404 Not Found', () => pm.response.to.have.status(404));",
+        "pm.test('формат ProblemDetails', () => { const b = pm.response.json(); ['type','title','status'].forEach(k => pm.expect(b).to.have.property(k)); });"
+      ] } }]
+    },
+    {
+      "name": "20. Видалення автора з книгами -> 409 (інваріант)",
+      "request": { "method": "DELETE", "url": { "raw": "{{baseUrl}}/api/authors/1", "host": ["{{baseUrl}}"], "path": ["api","authors","1"] } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+        "pm.test('причина — в автора є книги', () => pm.expect(pm.response.json().detail.toLowerCase()).to.include('book'));"
+      ] } }]
+    },
+    {
+      "name": "21. Друга специфікація: /api/books/out-of-stock",
+      "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/books/out-of-stock", "host": ["{{baseUrl}}"], "path": ["api","books","out-of-stock"] } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('200 OK — та сама ListAsync, інша специфікація', () => pm.response.to.have.status(200));",
+        "pm.test('масив у відповіді', () => pm.expect(pm.response.json()).to.be.an('array'));"
+      ] } }]
+    },
+    {
+      "name": "22. Третя специфікація: /api/books/by-genre/poetry",
+      "request": { "method": "GET", "url": {
+        "raw": "{{baseUrl}}/api/books/by-genre/poetry?take=5",
+        "host": ["{{baseUrl}}"], "path": ["api","books","by-genre","poetry"],
+        "query": [{ "key": "take", "value": "5" }]
+      } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('200 OK', () => pm.response.to.have.status(200));",
+        "pm.test('повернуто книги жанру', () => pm.expect(pm.response.json().length).to.be.at.least(1));"
+      ] } }]
+    },
+    {
+      "name": "23. Прибирання: м'яке видалення тестової книги -> 204",
+      "request": { "method": "DELETE", "url": { "raw": "{{baseUrl}}/api/books/{{bookId}}", "host": ["{{baseUrl}}"], "path": ["api","books","{{bookId}}"] } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('204 No Content', () => pm.response.to.have.status(204));",
+        "pm.collectionVariables.set('isbn', '');"
+      ] } }]
+    },
+    {
+      "name": "24. Видалена книга більше не читається -> 404",
+      "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/books/{{bookId}}", "host": ["{{baseUrl}}"], "path": ["api","books","{{bookId}}"] } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('404 Not Found (м\\'яке видалення)', () => pm.response.to.have.status(404));"
+      ] } }]
+    },
+    {
+      "name": "25. Swagger / OpenAPI доступний",
+      "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/swagger/v1/swagger.json", "host": ["{{baseUrl}}"], "path": ["swagger","v1","swagger.json"] } },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('200 OK', () => pm.response.to.have.status(200));",
+        "const p = Object.keys(pm.response.json().paths);",
+        "pm.test('описано books, authors, genres', () => { ['/api/books','/api/authors','/api/genres'].forEach(x => pm.expect(p.some(k => k.startsWith(x))).to.be.true); });"
+      ] } }]
+    }
+  ]
+}
