@@ -1,0 +1,90 @@
+{
+    "service": "Library.Platform.ApiGateway",
+    "description": "Єдина точка входу платформи «Система управління бібліотекою»",
+    "routes": [
+        {
+            "route": "aggregator",
+            "path": "/api/aggregator/{**catch-all}",
+            "cluster": "aggregator",
+            "order": 1
+        },
+        {
+            "route": "lending-books",
+            "path": "/api/lending/books/{**catch-all}",
+            "cluster": "lending",
+            "order": 2
+        },
+        {
+            "route": "authors",
+            "path": "/api/authors/{**catch-all}",
+            "cluster": "catalog",
+            "order": 5
+        },
+        {
+            "route": "books",
+            "path": "/api/books/{**catch-all}",
+            "cluster": "catalog",
+            "order": 5
+        },
+        {
+            "route": "discussions",
+            "path": "/api/discussions/{**catch-all}",
+            "cluster": "reviews",
+            "order": 5
+        },
+        {
+            "route": "genres",
+            "path": "/api/genres/{**catch-all}",
+            "cluster": "catalog",
+            "order": 5
+        },
+        {
+            "route": "loans",
+            "path": "/api/loans/{**catch-all}",
+            "cluster": "lending",
+            "order": 5
+        },
+        {
+            "route": "readers",
+            "path": "/api/readers/{**catch-all}",
+            "cluster": "lending",
+            "order": 5
+        },
+        {
+            "route": "reviews",
+            "path": "/api/reviews/{**catch-all}",
+            "cluster": "reviews",
+            "order": 5
+        }
+    ],
+    "clusters": [
+        {
+            "cluster": "aggregator",
+            "destinations": [
+                "http://aggregator"
+            ],
+            "loadBalancing": "PowerOfTwoChoices (default)"
+        },
+        {
+            "cluster": "catalog",
+            "destinations": [
+                "http://catalog-api"
+            ],
+            "loadBalancing": "RoundRobin"
+        },
+        {
+            "cluster": "lending",
+            "destinations": [
+                "http://lending-api"
+            ],
+            "loadBalancing": "PowerOfTwoChoices (default)"
+        },
+        {
+            "cluster": "reviews",
+            "destinations": [
+                "http://reviews-api"
+            ],
+            "loadBalancing": "PowerOfTwoChoices (default)"
+        }
+    ]
+}

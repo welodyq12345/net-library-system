@@ -3,6 +3,8 @@ using Library.Platform.Aggregator.Clients;
 using Library.Platform.Aggregator.Dtos;
 using Library.Platform.Aggregator.Services;
 using Microsoft.Extensions.Logging.Abstractions;
+using Polly.CircuitBreaker;
+using Polly.Timeout;
 
 namespace Library.Platform.Tests;
 
@@ -215,6 +217,33 @@ public class AggregationTests
     {
         _lending.Loan = Loan(10);
         _catalog.Failure = new TaskCanceledException("The request was canceled due to timeout");
+
+        var result = await CreateSut().GetFullLoanAsync(1, default);
+
+        Assert.NotNull(result);
+        Assert.Contains(result!.Warnings, w => w.Contains("catalog-api"));
+    }
+
+    [Fact]
+    public async Task GetFullLoan_Розімкнутий_запобіжник_стає_попередженням()
+    {
+        // запобіжник розмикається після кількох невдалих спроб і далі
+        // відхиляє виклики САМ, не доходячи до мережі
+        _lending.Loan = Loan(10);
+        _catalog.Failure = new BrokenCircuitException("The circuit is now open");
+
+        var result = await CreateSut().GetFullLoanAsync(1, default);
+
+        Assert.NotNull(result);
+        Assert.Contains(result!.Warnings, w => w.Contains("catalog-api"));
+    }
+
+    [Fact]
+    public async Task GetFullLoan_Вичерпаний_бюджет_часу_стає_попередженням()
+    {
+        // загальний бюджет часу конвеєра стійкості вичерпано
+        _lending.Loan = Loan(10);
+        _catalog.Failure = new TimeoutRejectedException("The operation didn't complete within the allowed timeout");
 
         var result = await CreateSut().GetFullLoanAsync(1, default);
 

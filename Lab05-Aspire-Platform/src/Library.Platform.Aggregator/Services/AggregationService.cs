@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Polly;
 using Library.Platform.Aggregator.Clients;
 using Library.Platform.Aggregator.Dtos;
 
@@ -167,9 +168,17 @@ public sealed class AggregationService(
     /// доступності, перетворюючи їх на попередження.
     /// </summary>
     /// <remarks>
-    /// Перехоплюються лише помилки транспорту й таймаути
-    /// (<see cref="HttpRequestException"/>, <see cref="TaskCanceledException"/>) —
-    /// помилки в самому Агрегаторі маскувати не можна, вони мають дійти до
+    /// Перехоплюються лише помилки ДОСТУПНОСТІ сервісу:
+    /// <list type="bullet">
+    ///   <item><see cref="HttpRequestException"/> — з'єднання не встановлено;</item>
+    ///   <item><see cref="TaskCanceledException"/> — запит не встиг;</item>
+    ///   <item><see cref="ExecutionRejectedException"/> — виклик відхилив сам
+    ///   конвеєр стійкості: вичерпано загальний бюджет часу
+    ///   (<c>TimeoutRejectedException</c>) або розімкнувся запобіжник
+    ///   (<c>BrokenCircuitException</c>). Без цієї гілки зупинений сервіс давав
+    ///   би 500 замість часткової відповіді.</item>
+    /// </list>
+    /// Помилки в самому Агрегаторі маскувати не можна — вони мають дійти до
     /// глобального обробника.
     /// </remarks>
     private async Task<T?> TrackAsync<T>(
@@ -193,7 +202,9 @@ public sealed class AggregationService(
 
             return result;
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        catch (Exception ex) when (ex is HttpRequestException
+                                      or TaskCanceledException
+                                      or ExecutionRejectedException)
         {
             stopwatch.Stop();
 
