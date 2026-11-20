@@ -1,0 +1,48 @@
+# ---------------------------------------------------------------- .NET ----
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Bb]uild[Ll]og.*
+*.user
+*.suo
+*.userprefs
+*.cache
+*.dll
+*.pdb
+*.exe
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# -------------------------------------------------------------- IDE ------
+.vs/
+.vscode/
+.idea/
+*.swp
+*~
+
+# ------------------------------------------------------------- Логи ------
+logs/
+*.log.txt
+
+# Звіти автоперевірок зберігаються свідомо — вони є частиною здачі:
+# !Docs/*.log
+
+# -------------------------------------------- Локальні налаштування -------
+appsettings.Development.local.json
+appsettings.Local.json
+*.env
+.env.local
+secrets.json
+
+# ------------------------------------------------------------ Інше --------
+node_modules/
+TestResults/
+coverage*.json
+coverage*.xml
+*.received.*
+.DS_Store
+Thumbs.db
