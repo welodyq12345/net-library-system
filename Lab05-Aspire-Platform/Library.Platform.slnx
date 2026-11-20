@@ -1,0 +1,16 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Library.Platform.AppHost/Library.Platform.AppHost.csproj" />
+    <Project Path="src/Library.Platform.ServiceDefaults/Library.Platform.ServiceDefaults.csproj" />
+    <Project Path="src/Library.Platform.ApiGateway/Library.Platform.ApiGateway.csproj" />
+    <Project Path="src/Library.Platform.Aggregator/Library.Platform.Aggregator.csproj" />
+  </Folder>
+  <Folder Name="/services/">
+    <Project Path="../Lab02-AdoNet-Dapper/src/Library.Lending.Api/Library.Lending.Api.csproj" />
+    <Project Path="../Lab03-EfCore/src/Library.Catalog.Api/Library.Catalog.Api.csproj" />
+    <Project Path="../Lab04-CleanArchitecture-MongoDB/src/Library.Reviews.WebApi/Library.Reviews.WebApi.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Library.Platform.Tests/Library.Platform.Tests.csproj" />
+  </Folder>
+</Solution>

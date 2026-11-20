@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Library.Reviews.Application/Library.Reviews.Application.csproj" />
+    <Project Path="src/Library.Reviews.Domain/Library.Reviews.Domain.csproj" />
+    <Project Path="src/Library.Reviews.Infrastructure/Library.Reviews.Infrastructure.csproj" />
+    <Project Path="src/Library.Reviews.WebApi/Library.Reviews.WebApi.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Library.Reviews.Tests/Library.Reviews.Tests.csproj" />
+  </Folder>
+</Solution>

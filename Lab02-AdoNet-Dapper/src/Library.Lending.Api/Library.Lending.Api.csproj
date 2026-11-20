@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Library.Lending.Bll\Library.Lending.Bll.csproj" />
+    <ProjectReference Include="..\..\..\Lab05-Aspire-Platform\src\Library.Platform.ServiceDefaults\Library.Platform.ServiceDefaults.csproj" />
   </ItemGroup>
 
 </Project>

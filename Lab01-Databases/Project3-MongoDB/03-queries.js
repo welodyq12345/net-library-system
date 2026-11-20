@@ -39,7 +39,7 @@ db.readerProfiles.find().forEach((doc) => {
 line("2. Embedding: автор і коментарі приходять разом із відгуком (1 запит)");
 printjson(db.reviews.findOne(
     { _id: ObjectId("66f0c20000000000000000b1") },
-    { bookTitle: 1, "author.displayName": 1, "comments.author": 1, "comments.text": 1 }
+    { bookTitle: 1, "author.displayName": 1, "comments.author.displayName": 1, "comments.text": 1 }
 ));
 
 /* =============================================================================
@@ -99,7 +99,7 @@ line("5. Aggregation + $unwind: топ коментаторів за лайка�
 db.reviews.aggregate([
     { $unwind: "$comments" },
     { $group: {
-        _id: "$comments.author",
+        _id: "$comments.author.displayName",
         comments: { $sum: 1 },
         likes: { $sum: { $ifNull: ["$comments.likes", 0] } }
     } },

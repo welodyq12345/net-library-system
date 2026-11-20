@@ -5,6 +5,7 @@ using Library.Lending.Bll.Mapping;
 using Library.Lending.Bll.Services;
 using Library.Lending.Dal.Abstractions;
 using Library.Lending.Dal.Infrastructure;
+using Library.Platform.ServiceDefaults;
 using Microsoft.AspNetCore.Mvc;
 using Serilog;
 
@@ -21,14 +22,18 @@ var connectionString = builder.Configuration.GetConnectionString("LendingDb")
     ?? throw new InvalidOperationException("Connection string 'LendingDb' is missing");
 
 /* =============================================================================
-   2. Логування: Serilog зі структурованими логами.
-      Рівні та sink-и задані в appsettings.json, тому їх можна змінювати
-      без перезбирання.
+   2. Платформні налаштування (Лаб. 05).
+
+   Один рядок замінює власну конфігурацію логування: ServiceDefaults дає
+   Serilog зі структурованими логами, OpenTelemetry (трасування вхідних
+   запитів, вихідних HTTP-викликів і звернень до БД), health checks,
+   service discovery і стійкі HttpClient-и — однаково в усіх компонентах
+   платформи.
+
+   Поза платформою сервіс працює так само: рівні й sink-и логування
+   по-старому читаються з appsettings.json.
    ============================================================================= */
-builder.Host.UseSerilog((ctx, cfg) => cfg
-    .ReadFrom.Configuration(ctx.Configuration)
-    .Enrich.FromLogContext()
-    .Enrich.WithProperty("Service", "Library.Lending.Api"));
+builder.AddServiceDefaults();
 
 /* =============================================================================
    3. Dapper: одноразове налаштування мапінгу (DateOnly -> DATE тощо).
@@ -134,7 +139,10 @@ if (app.Configuration.GetValue("Database:ApplyScriptsOnStartup", false))
    9. Конвеєр обробки запитів.
    ============================================================================= */
 app.UseExceptionHandler();      // має стояти ПЕРЕД маршрутизацією
-app.UseSerilogRequestLogging();
+// CorrelationId + логування запитів (ServiceDefaults): наскрізний
+// ідентифікатор потрапляє в LogContext, у заголовок відповіді та у вихідні
+// HTTP-виклики — так один запит видно в логах усіх сервісів ланцюжка
+app.UseServiceDefaults();
 
 app.UseSwagger();
 app.UseSwaggerUI(o =>
@@ -144,6 +152,11 @@ app.UseSwaggerUI(o =>
 });
 
 app.MapControllers();
+
+// /alive (живучість) і /health/ready (усі перевірки) від ServiceDefaults.
+// Власний /health нижче лишається: він перевіряє саме базу цього сервісу,
+// а двічі зареєстрований однаковий маршрут дав би AmbiguousMatchException.
+app.MapDefaultEndpoints("/health/ready");
 
 // корінь відкриває Swagger UI — зручно під час демонстрації
 app.MapGet("/", () => Results.Redirect("/swagger"))

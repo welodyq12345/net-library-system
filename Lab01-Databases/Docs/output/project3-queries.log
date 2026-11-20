@@ -46,11 +46,15 @@
   },
   comments: [
     {
-      author: 'Андрій',
+      author: {
+        displayName: 'Андрій'
+      },
       text: 'Згоден, примітки врятували.'
     },
     {
-      author: 'Марія',
+      author: {
+        displayName: 'Марія'
+      },
       text: 'А яке саме видання?'
     }
   ]

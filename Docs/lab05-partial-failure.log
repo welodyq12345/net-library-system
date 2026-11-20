@@ -1,0 +1,81 @@
+=== Часткова відмова: reviews-api зупинено ===
+GET http://localhost:5000/api/aggregator/loans/1/full
+
+Платформа: http://localhost:5000
+
+[*] Часткова відмова: reviews-api має бути ЗУПИНЕНИЙ у Dashboard
+  OK   агрегувальний запит НЕ падає з 500
+  OK   видача на місці
+  OK   книги Каталогу на місці
+  OK   відгуків немає
+  OK   у warnings є причина
+       warning: reviews-api/reviews is unavailable: The operation didn't complete within the allowed timeout of '00:00:03'.
+       warning: reviews-api/ratings is unavailable: The operation didn't complete within the allowed timeout of '00:00:03'.
+  OK   meta позначила виклик як unavailable
+
+============================================================
+Пройдено: 6   Не пройдено: 0
+
+=== Фрагмент відповіді (HTTP 200) ===
+{
+  "books": [
+    {
+      "id": 1,
+      "title": "Кобзар",
+      "isbn": "978-966-03-5555-1",
+      "dailyFee": 3.5,
+      "availableCopies": 2,
+      "publishedYear": 1840,
+      "authorName": "Тарас Шевченко",
+      "genres": [
+        "Поезія",
+        "Класика"
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Тигролови",
+      "isbn": "978-966-03-5555-2",
+      "dailyFee": 4.0,
+      "availableCopies": 1,
+      "publishedYear": 1944,
+      "authorName": "Іван Багряний",
+      "genres": [
+        "Історичний роман",
+        "Класика"
+      ]
+    }
+  ],
+  "reviews": [],
+  "warnings": [
+    "reviews-api/reviews is unavailable: The operation didn't complete within the allowed timeout of '00:00:03'.",
+    "reviews-api/ratings is unavailable: The operation didn't complete within the allowed timeout of '00:00:03'."
+  ],
+  "meta": {
+    "totalMs": 9612,
+    "sequentialMs": 19110,
+    "calls": [
+      {
+        "service": "catalog-api",
+        "status": "ok",
+        "elapsedMs": 13
+      },
+      {
+        "service": "lending-api/loans",
+        "status": "ok",
+        "elapsedMs": 9
+      },
+      {
+        "service": "lending-api/readers",
+        "status": "ok",
+        "elapsedMs": 7
+      },
+      {
+        "service": "reviews-api/ratings",
+        "status": "unavailable",
+        "elapsedMs": 9595
+      },
+      {
+        "service": "reviews-api/reviews",
+        "status": "unavailable",
+      
