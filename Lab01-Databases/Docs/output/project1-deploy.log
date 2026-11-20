@@ -1,0 +1,15 @@
+Changed database context to 'LibraryLendingDb'.
+LibraryLendingDb: schema.sql виконано успішно.
+Changed database context to 'LibraryLendingDb'.
+LibraryLendingDb: procedures.sql виконано успішно (7 процедур).
+Changed database context to 'LibraryLendingDb'.
+LibraryLendingDb: seed.sql виконано успішно (повторний запуск дублікатів не створює).
+Table             Rows       
+----------------- -----------
+Readers                     4
+Books                       6
+Loans                       3
+LoanDetails                 3
+LoanItems                   5
+LoanStatusHistory           8
+FinePayments                1
