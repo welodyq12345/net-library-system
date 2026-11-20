@@ -1,0 +1,417 @@
+{
+  "info": {
+    "name": "Library Lending API (Лаб. 02)",
+    "description": "Мікросервіс «Видача книг» системи управління бібліотекою.\nТришарова архітектура на ADO.NET та Dapper.\n\nВстановіть змінну baseUrl (за замовчуванням http://localhost:5190)\nі запустіть Runner: запити виконуються в порядку, що демонструє\nповний життєвий цикл видачі та всі критичні статуси (201/200/204/400/404/409).\n\nУВАГА: колекція змінює стан бази. Перед повторним прогоном\nперезасійте БД скриптами з Лаб. 01.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5190", "type": "string" },
+    { "key": "loanId", "value": "", "type": "string" },
+    { "key": "cancelLoanId", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "00. Health — база досяжна",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] }
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('200 OK', () => pm.response.to.have.status(200));",
+          "pm.test('статус Healthy', () => pm.expect(pm.response.json().status).to.eql('Healthy'));"
+        ], "type": "text/javascript" }
+      }]
+    },
+    {
+      "name": "01. GET /api/books — локальна копія довідника",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{baseUrl}}/api/books", "host": ["{{baseUrl}}"], "path": ["api", "books"] }
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('200 OK', () => pm.response.to.have.status(200));",
+          "pm.test('список непорожній', () => pm.expect(pm.response.json().length).to.be.above(0));",
+          "pm.test('кирилиця збереглася', () => pm.expect(JSON.stringify(pm.response.json())).to.include('Кобзар'));"
+        ], "type": "text/javascript" }
+      }]
+    },
+    {
+      "name": "02. GET /api/loans/3 — видача з позиціями (Dapper multi-mapping)",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{baseUrl}}/api/loans/3", "host": ["{{baseUrl}}"], "path": ["api", "loans", "3"] }
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "const b = pm.response.json();",
+          "pm.test('200 OK', () => pm.response.to.have.status(200));",
+          "pm.test('деталі видачі прийшли (зв\\'язок 1:1)', () => pm.expect(b.detail).to.not.be.null);",
+          "pm.test('дві позиції (зв\\'язок M:N)', () => pm.expect(b.items.length).to.eql(2));",
+          "pm.test('знімки полів каталогу в позиціях', () => b.items.forEach(i => { pm.expect(i.bookTitle).to.be.a('string').and.not.empty; pm.expect(i.dailyFee).to.be.above(0); }));",
+          "pm.test('пеню нарахувала процедура (64.75)', () => pm.expect(b.fineAmount).to.eql(64.75));"
+        ], "type": "text/javascript" }
+      }]
+    },
+    {
+      "name": "03. GET неіснуючий Id -> 404 ProblemDetails (НЕ 500)",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{baseUrl}}/api/loans/999999", "host": ["{{baseUrl}}"], "path": ["api", "loans", "999999"] }
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('404 Not Found', () => pm.response.to.have.status(404));",
+          "const b = pm.response.json();",
+          "pm.test('формат ProblemDetails', () => { pm.expect(b).to.have.property('type'); pm.expect(b).to.have.property('title'); pm.expect(b).to.have.property('status'); });",
+          "pm.test('є traceId', () => pm.expect(b.traceId).to.be.a('string'));"
+        ], "type": "text/javascript" }
+      }]
+    },
+    {
+      "name": "04. POST confirm вже поверненої -> 409 (THROW 50002)",
+      "request": {
+        "method": "POST",
+        "url": { "raw": "{{baseUrl}}/api/loans/3/confirm", "host": ["{{baseUrl}}"], "path": ["api", "loans", "3", "confirm"] }
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+          "pm.test('повідомлення прийшло зі збережуваної процедури', () => pm.expect(pm.response.json().detail).to.include('only for a new loan'));"
+        ], "type": "text/javascript" }
+      }]
+    },
+    {
+      "name": "05. POST cancel виданої на руки -> 409",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"reason\": \"перевірка недопустимого переходу\"\n}" },
+        "url": { "raw": "{{baseUrl}}/api/loans/2/cancel", "host": ["{{baseUrl}}"], "path": ["api", "loans", "2", "cancel"] }
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+          "pm.test('скасувати можна лише до видачі', () => pm.expect(pm.response.json().detail).to.include('before the books are issued'));"
+        ], "type": "text/javascript" }
+      }]
+    },
+    {
+      "name": "06. POST з порожніми полями -> 400 з помилками по полях",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"readerId\": 1,\n  \"dueDate\": \"2026-12-31\",\n  \"pickupBranch\": \"\",\n  \"items\": []\n}" },
+        "url": { "raw": "{{baseUrl}}/api/loans", "host": ["{{baseUrl}}"], "path": ["api", "loans"] }
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+          "const e = pm.response.json().errors;",
+          "pm.test('помилки розбиті по полях', () => { pm.expect(e).to.be.an('object'); pm.expect(Object.keys(e).length).to.be.above(1); });"
+        ], "type": "text/javascript" }
+      }]
+    },
+    {
+      "name": "07. ВІДКАТ: замовити 99 примірників при 1 наявному -> 409",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json; charset=utf-8" }],
+        "body": { "mode": "raw", "raw": "{\n  \"readerId\": 1,\n  \"dueDate\": \"2026-12-31\",\n  \"pickupBranch\": \"Центральна філія\",\n  \"items\": [{ \"bookId\": 6, \"units\": 99 }]\n}" },
+        "url": { "raw": "{{baseUrl}}/api/loans", "host": ["{{baseUrl}}"], "path": ["api", "loans"] }
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+          "pm.test('бізнес-перевірка спрацювала', () => pm.expect(pm.response.json().detail).to.include('copies available'));"
+        ], "type": "text/javascript" }
+      }]
+    },
+    {
+      "name": "08. Залишок НЕ змінився після відкату",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{baseUrl}}/api/books/6", "host": ["{{baseUrl}}"], "path": ["api", "books", "6"] }
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('200 OK', () => pm.response.to.have.status(200));",
+          "pm.test('примірників як було (1)', () => pm.expect(pm.response.json().copiesAvailable).to.eql(1));"
+        ], "type": "text/javascript" }
+      }]
+    },
+    {
+      "name": "09. POST /api/loans -> 201 Created + Location",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json; charset=utf-8" }],
+        "body": { "mode": "raw", "raw": "{\n  \"readerId\": 1,\n  \"dueDate\": \"2026-12-31\",\n  \"pickupBranch\": \"Центральна філія\",\n  \"comment\": \"Postman: повний цикл\",\n  \"items\": [{ \"bookId\": 1, \"units\": 1 }, { \"bookId\": 2, \"units\": 1 }]\n}" },
+        "url": { "raw": "{{baseUrl}}/api/loans", "host": ["{{baseUrl}}"], "path": ["api", "loans"] }
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('201 Created', () => pm.response.to.have.status(201));",
+          "pm.test('є заголовок Location', () => pm.expect(pm.response.headers.has('Location')).to.be.true);",
+          "const b = pm.response.json();",
+          "pm.test('статус Submitted', () => pm.expect(b.status).to.eql('Submitted'));",
+          "pm.test('позиції отримали знімки з довідника', () => b.items.forEach(i => pm.expect(i.bookTitle).to.not.be.empty));",
+          "pm.collectionVariables.set('loanId', b.id);"
+        ], "type": "text/javascript" }
+      }]
+    },
+    {
+      "name": "10. POST issue -> 200 (транзакція: статус + залишок)",
+      "request": {
+        "method": "POST",
+        "url": { "raw": "{{baseUrl}}/api/loans/{{loanId}}/issue", "host": ["{{baseUrl}}"], "path": ["api", "loans", "{{loanId}}", "issue"] }
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('200 OK', () => pm.response.to.have.status(200));",
+          "pm.test('статус Issued', () => pm.expect(pm.response.json().status).to.eql('Issued'));"
+        ], "type": "text/javascript" }
+      }]
+    },
+    {
+      "name": "11. GET history — журнал переходів статусів",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{baseUrl}}/api/loans/{{loanId}}/history", "host": ["{{baseUrl}}"], "path": ["api", "loans", "{{loanId}}", "history"] }
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('200 OK', () => pm.response.to.have.status(200));",
+          "pm.test('щонайменше 3 переходи', () => pm.expect(pm.response.json().length).to.be.at.least(3));"
+        ], "type": "text/javascript" }
+      }]
+    },
+    {
+      "name": "12. POST return -> 200, пеня 0 (у термін)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{}" },
+        "url": { "raw": "{{baseUrl}}/api/loans/{{loanId}}/return", "host": ["{{baseUrl}}"], "path": ["api", "loans", "{{loanId}}", "return"] }
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('200 OK', () => pm.response.to.have.status(200));",
+          "const b = pm.response.json();",
+          "pm.test('статус Returned', () => pm.expect(b.status).to.eql('Returned'));",
+          "pm.test('пеня 0 — повернено в термін', () => pm.expect(b.fineAmount).to.eql(0));"
+        ], "type": "text/javascript" }
+      }]
+    },
+    {
+      "name": "13. POST нову видачу для скасування -> 201",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json; charset=utf-8" }],
+        "body": { "mode": "raw", "raw": "{\n  \"readerId\": 2,\n  \"dueDate\": \"2026-12-31\",\n  \"pickupBranch\": \"Філія №2\",\n  \"items\": [{ \"bookId\": 5, \"units\": 1 }]\n}" },
+        "url": { "raw": "{{baseUrl}}/api/loans", "host": ["{{baseUrl}}"], "path": ["api", "loans"] }
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('201 Created', () => pm.response.to.have.status(201));",
+          "pm.collectionVariables.set('cancelLoanId', pm.response.json().id);"
+        ], "type": "text/javascript" }
+      }]
+    },
+    {
+      "name": "14. POST cancel НОВОЇ видачі -> 200 Cancelled",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json; charset=utf-8" }],
+        "body": { "mode": "raw", "raw": "{\n  \"reason\": \"Читач передумав\"\n}" },
+        "url": { "raw": "{{baseUrl}}/api/loans/{{cancelLoanId}}/cancel", "host": ["{{baseUrl}}"], "path": ["api", "loans", "{{cancelLoanId}}", "cancel"] }
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('200 OK', () => pm.response.to.have.status(200));",
+          "pm.test('статус Cancelled', () => pm.expect(pm.response.json().status).to.eql('Cancelled'));"
+        ], "type": "text/javascript" }
+      }]
+    },
+    {
+      "name": "15. Спецсимвол O'Brien читається коректно",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{baseUrl}}/api/readers", "host": ["{{baseUrl}}"], "path": ["api", "readers"] }
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('200 OK', () => pm.response.to.have.status(200));",
+          "const o = pm.response.json().filter(r => r.fullName.includes('Brien'));",
+          "pm.test('читач Liam O\\'Brien є і прочитався без помилки SQL', () => { pm.expect(o.length).to.eql(1); pm.expect(o[0].fullName).to.eql(\"Liam O'Brien\"); });"
+        ], "type": "text/javascript" }
+      }]
+    },
+    {
+      "name": "16. Спроба SQL-ін'єкції в ?title -> порожній результат",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/books?title=%27%20OR%201%3D1%20--",
+          "host": ["{{baseUrl}}"], "path": ["api", "books"],
+          "query": [{ "key": "title", "value": "%27%20OR%201%3D1%20--" }]
+        }
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('200 OK — запит не зламався', () => pm.response.to.have.status(200));",
+          "pm.test('повернуто 0 книг, а не всі (параметризація працює)', () => pm.expect(pm.response.json().length).to.eql(0));"
+        ], "type": "text/javascript" }
+      }]
+    },
+    {
+      "name": "17. Ідемпотентність: повтор оплати пені (ключ seed-fine-1)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"amount\": 64.75,\n  \"method\": \"Card\",\n  \"idempotencyKey\": \"seed-fine-1\"\n}" },
+        "url": { "raw": "{{baseUrl}}/api/loans/3/fine-payments", "host": ["{{baseUrl}}"], "path": ["api", "loans", "3", "fine-payments"] }
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('повернуто наявний платіж, а не створено новий', () => pm.expect(pm.response.json().idempotencyKey).to.eql('seed-fine-1'));"
+        ], "type": "text/javascript" }
+      }]
+    },
+    {
+      "name": "18. GET fine-payments — створено рівно один платіж",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{baseUrl}}/api/loans/3/fine-payments", "host": ["{{baseUrl}}"], "path": ["api", "loans", "3", "fine-payments"] }
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('200 OK', () => pm.response.to.have.status(200));",
+          "pm.test('дублікат не створено (1 платіж)', () => pm.expect(pm.response.json().length).to.eql(1));"
+        ], "type": "text/javascript" }
+      }]
+    },
+    {
+      "name": "19. GET loan-summary — звіт із процедури + view",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{baseUrl}}/api/readers/3/loan-summary", "host": ["{{baseUrl}}"], "path": ["api", "readers", "3", "loan-summary"] }
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('200 OK', () => pm.response.to.have.status(200));",
+          "const r = pm.response.json()[0];",
+          "pm.test('звіт містить агрегати', () => { pm.expect(r).to.have.property('titlesCount'); pm.expect(r).to.have.property('dailyChargeTotal'); });"
+        ], "type": "text/javascript" }
+      }]
+    },
+    {
+      "name": "20. loan-summary для неіснуючого читача -> 404 (THROW 50001)",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{baseUrl}}/api/readers/999999/loan-summary", "host": ["{{baseUrl}}"], "path": ["api", "readers", "999999", "loan-summary"] }
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+        ], "type": "text/javascript" }
+      }]
+    },
+    {
+      "name": "21. GET /api/loans/overdue — фільтрований індекс",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{baseUrl}}/api/loans/overdue", "host": ["{{baseUrl}}"], "path": ["api", "loans", "overdue"] }
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('200 OK', () => pm.response.to.have.status(200));",
+          "pm.test('прострочена видача №2 у списку', () => pm.expect(pm.response.json().some(l => l.id === 2)).to.be.true);"
+        ], "type": "text/javascript" }
+      }]
+    },
+    {
+      "name": "22. PUT blocked=true -> 204",
+      "request": {
+        "method": "PUT",
+        "url": {
+          "raw": "{{baseUrl}}/api/readers/4/blocked?value=true",
+          "host": ["{{baseUrl}}"], "path": ["api", "readers", "4", "blocked"],
+          "query": [{ "key": "value", "value": "true" }]
+        }
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"], "type": "text/javascript" }
+      }]
+    },
+    {
+      "name": "23. Видача заблокованому читачеві -> 409",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json; charset=utf-8" }],
+        "body": { "mode": "raw", "raw": "{\n  \"readerId\": 4,\n  \"dueDate\": \"2026-12-31\",\n  \"pickupBranch\": \"Центральна філія\",\n  \"items\": [{ \"bookId\": 1, \"units\": 1 }]\n}" },
+        "url": { "raw": "{{baseUrl}}/api/loans", "host": ["{{baseUrl}}"], "path": ["api", "loans"] }
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+          "pm.test('причина — читач заблокований', () => pm.expect(pm.response.json().detail.toLowerCase()).to.include('blocked'));"
+        ], "type": "text/javascript" }
+      }]
+    },
+    {
+      "name": "24. PUT blocked=false -> 204 (повертаємо стан)",
+      "request": {
+        "method": "PUT",
+        "url": {
+          "raw": "{{baseUrl}}/api/readers/4/blocked?value=false",
+          "host": ["{{baseUrl}}"], "path": ["api", "readers", "4", "blocked"],
+          "query": [{ "key": "value", "value": "false" }]
+        }
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"], "type": "text/javascript" }
+      }]
+    },
+    {
+      "name": "25. GET /swagger/v1/swagger.json — OpenAPI доступний",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{baseUrl}}/swagger/v1/swagger.json", "host": ["{{baseUrl}}"], "path": ["swagger", "v1", "swagger.json"] }
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('200 OK', () => pm.response.to.have.status(200));",
+          "const p = Object.keys(pm.response.json().paths);",
+          "pm.test('описано всі три групи ендпоінтів', () => { pm.expect(p.some(x => x.startsWith('/api/loans'))).to.be.true; pm.expect(p.some(x => x.startsWith('/api/readers'))).to.be.true; pm.expect(p.some(x => x.startsWith('/api/books'))).to.be.true; });"
+        ], "type": "text/javascript" }
+      }]
+    }
+  ]
+}
